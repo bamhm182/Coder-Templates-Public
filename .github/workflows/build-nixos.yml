@@ -1,0 +1,61 @@
+name: Package NixOS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@v4
+
+    - name: Create Template Tarball
+      run: |
+        cd nixos/src/template/
+        tar cf ../../../nixos-template.tar *
+
+    - name: Upload Coder Template Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Coder Template
+        path: ./nixos-template.tar.gz
+
+    - name: Install QCOW2 Creation Dependencies
+      run: sudo apt update && sudo apt install -y qemu-utils e2fsprogs parted
+
+    - name: Create Home Image
+      run: |
+        sudo qemu-img create -f qcow ./uncompressed.qcow2 20G
+        sudo modprobe nbd max_parth=10
+        sudo qemu-nbd --connect /dev/nbd0 ./uncompressed.qcow2
+        sudo parted --script --align optimal /dev/nbd0 unit MiB mklabel gpt mkpart primary ext4 0% 100%
+        sudo mkfs.ext4 -L home /dev/nbd0p1
+        sudo qemu-nbd --disconnect /dev/nbd0
+        sudo qemu-img convert -c -O qcow2 ./uncompressed.qcow2 ./home.ext4.qcow2
+
+    - name: Upload Home QCOW2 Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: QCOW2 (Home)
+        path: ./home.ext4.qcow2
+
+    - name: Set up Nix
+      uses: cachix/install-nix-action@v22
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+
+    - name: Build NixOS QCOW2
+      run: |
+        nix build ./nixos/src/nixos#base --out-link ./build
+        cp ./build/nixos.qcow2 ./nixos-base.qcow2
+
+    - name: Upload NixOS QCOW2 Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: QCOW2 (NixOS)
+        path: ./nixos-base.qcow2
+
