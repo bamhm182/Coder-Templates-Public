@@ -22,7 +22,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Coder Template
-        path: ./nixos-template.tar.gz
+        path: ./nixos-template.tar
 
     - name: Install QCOW2 Creation Dependencies
       run: sudo apt update && sudo apt install -y qemu-utils e2fsprogs parted
